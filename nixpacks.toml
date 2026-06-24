@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = [
+  "nodejs_20",
+  "ffmpeg",
+  "unzip",
+  "libheif"
+]
+
+[phases.install]
+cmds = ["npm ci --omit=dev"]
+
+[phases.build]
+cmds = ["mkdir -p temp-requests output"]
+
+[start]
+cmd = "node server.js"

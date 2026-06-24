@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  zopubairan:
+    build: .
+    ports:
+      - "${PORT:-3005}:3005"
+    env_file:
+      - .env.local
+      - .env
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "1"

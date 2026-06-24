@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bairan Effect | GenZ Video Magic</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Video Background -->
+    <div class="video-bg-container">
+        <video autoplay muted loop playsinline class="video-bg">
+            <source src="Brain-madingvideo.mp4" type="video/mp4">
+        </video>
+        <div class="video-overlay"></div>
+    </div>
+
+    <main class="container">
+        <header class="hero">
+            <div class="badge">V2.0 LIVE</div>
+            <h1 class="glitch-text" data-text="BAIRAN EFFECT">BAIRAN EFFECT</h1>
+            <p class="subtitle">Insane freeze-frame magic. 60FPS. Fully automated.</p>
+        </header>
+
+        <section class="glass-container">
+            <form id="uploadForm">
+                <div class="upload-grid">
+                    <div class="upload-box" id="videoBox">
+                        <div class="box-header">
+                            <span class="step-num">01</span>
+                            <h3>Source Video</h3>
+                        </div>
+                        <div class="drop-area" id="videoDropZone">
+                            <div class="inner-icon">⚡</div>
+                            <p>Drop Video or <span>Click</span></p>
+                            <input type="file" id="videoInput" name="video" accept="video/*" required hidden>
+                            <div class="file-tag" id="videoInfo"></div>
+                        </div>
+                    </div>
+
+                    <div class="upload-box" id="photosBox">
+                        <div class="box-header">
+                            <span class="step-num">02</span>
+                            <h3>Story Photos</h3>
+                        </div>
+                        <div class="drop-area" id="photosDropZone">
+                            <div class="inner-icon">🔥</div>
+                            <p>Select Images or <span>Click</span></p>
+                            <input type="file" id="photosInput" name="photos" accept="image/*" multiple required hidden>
+                            <div class="file-tag" id="photosInfo"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cta-wrapper">
+                    <button type="submit" id="submitBtn" class="neon-button">
+                        <span class="btn-text">GENERATE MAGIC</span>
+                        <div class="orbit-loader"></div>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section id="statusSection" class="glass-container status-panel hidden">
+            <div class="status-inner">
+                <div class="status-header">
+                    <h2 id="statusTitle">Cooking your video...</h2>
+                    <div class="neon-progress">
+                        <div class="bar">
+                            <div class="fill"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step-list">
+                    <div class="step-item" data-step="1">Extracting</div>
+                    <div class="step-item" data-step="2">Background</div>
+                    <div class="step-item" data-step="3">Stickerify</div>
+                    <div class="step-item" data-step="4">Mastering</div>
+                </div>
+
+                <div id="resultArea" class="hidden result-reveal">
+                    <div class="win-icon">👑</div>
+                    <h3>GOATED! Video is ready.</h3>
+                    <div class="result-actions">
+                        <a id="downloadBtn" href="#" class="glow-link" download>GET VIDEO</a>
+                        <button id="resetBtn" class="ghost-btn">New Run</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="modern-footer">
+        <div class="footer-blur"></div>
+        <p>made by <a href="https://www.instagram.com/developer_rahul_/" target="_blank" class="dev-link">developer rahul</a></p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

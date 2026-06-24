@@ -1,0 +1,15 @@
+node_modules
+output
+middle-images
+temp-requests
+*.zip
+*.log
+*.txt
+ffmpeg
+ffprobe
+.DS_Store
+docker-compose.yml
+.env
+.env.local
+.agents/
+.gemini/

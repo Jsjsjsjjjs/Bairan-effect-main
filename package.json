@@ -1,0 +1,30 @@
+{
+  "name": "video-template-automation",
+  "version": "1.0.0",
+  "description": "Video template automation with freeze frame, background removal, and layering",
+  "main": "server.js",
+  "scripts": {
+    "step1": "node step1-extract-last-frame.js",
+    "step2": "node step2-remove-background.js",
+    "step3": "node step3-add-borders.js",
+    "step4": "node step4-compose-video.js",
+    "slideshow": "node create-middle-slideshow.js",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@imgly/background-removal-node": "^1.2.3",
+    "express": "^4.21.2",
+    "ffmpeg-transitions": "^1.0.8",
+    "fluent-ffmpeg": "^2.1.2",
+    "form-data": "^4.0.0",
+    "heic-convert": "^2.1.0",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.34.5"
+  },
+  "overrides": {
+    "sharp": "^0.34.5"
+  }
+}
