@@ -65,7 +65,7 @@ function main() {
     // Create freeze loop from last frame
     execSync(`${FFMPEG} -loop 1 -i "${OUTPUT_DIR}/last-frame-for-loop.png" -vf "format=yuv420p,fps=60,scale=1080:1920" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 -t ${freezeDuration} "${OUTPUT_DIR}/freeze-extension.mp4" -y`, { stdio: 'inherit' });
     // Concatenate original + freeze via filter_complex (works on all platforms)
-    execSync(`${FFMPEG} -i "${MAIN}" -i "${OUTPUT_DIR}/freeze-extension.mp4" -filter_complex "[0:v]fps=60,scale=1080:1920[v0];[1:v]fps=60,scale=1080:1920[v1];[v0][v1]concat=n=2:v=1:a=0[out]" -map [out] -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 "${OUTPUT_DIR}/extended-main.mp4" -y`, { stdio: 'inherit' });
+    execSync(`${FFMPEG} -i "${MAIN}" -i "${OUTPUT_DIR}/freeze-extension.mp4" -filter_complex "[0:v]format=yuv420p,fps=60,scale=1080:1920[v0];[1:v]format=yuv420p,fps=60,scale=1080:1920[v1];[v0][v1]concat=n=2:v=1:a=0[out]" -map [out] -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 "${OUTPUT_DIR}/extended-main.mp4" -y`, { stdio: 'inherit' });
     console.log('✓ Done\n');
   } catch (err) {
     console.error('❌ Step 1 failed:', err.message);
