@@ -6,28 +6,20 @@ const sharp = require('sharp');
 
 const FFMPEG = 'ffmpeg';
 const IMAGES_DIR = process.argv[2] || 'middle-images';
-const OUTPUT = process.argv[3] || path.join(__dirname, 'output/middle-slideshow.mp4');
-const DURATION = 9;          // Total slideshow duration in seconds
-const IMAGE_DURATION = 0.20; // Each image displays for 200ms (fast flip effect)
+const OUTPUT    = process.argv[3] || path.join(__dirname, 'output/middle-slideshow.mp4');
+const DURATION      = 9;    // Total slideshow duration in seconds
+const IMAGE_DURATION = 0.20; // Each image displays for 200ms
 
-// ── RAM budget: Railway starter = ~512MB, shared with Node + sharp ──────────
-// Keep ffmpeg under ~200MB by using:
-//   - ultrafast preset (lowest encoder RAM)
-//   - 2 threads max (each thread has its own scale context)
-//   - crf 28 (adequate for a 9s transition clip, not the final video)
-//   - Serialize image conversions (not parallel) to avoid spike
-const FFMPEG_THREADS = 2;
-const FFMPEG_CRF     = 26;   // Quality good enough for middle transition
-const FFMPEG_PRESET  = 'ultrafast'; // Lowest RAM footprint
+// Target resolution — pre-scale here so ffmpeg never has to swscale
+const TARGET_W = 1080;
+const TARGET_H = 1920;
 
 const OUTPUT_DIR = path.dirname(OUTPUT);
-if (!fs.existsSync(OUTPUT_DIR)) {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 async function createSlideshow() {
-  console.log(`🎬 Creating looping slideshow from ${IMAGES_DIR}\n`);
-  console.log(`Output: ${OUTPUT}\n`);
+  console.log(`🎬 Creating slideshow from ${IMAGES_DIR}`);
+  console.log(`Output: ${OUTPUT}`);
 
   if (!fs.existsSync(IMAGES_DIR)) {
     console.error(`❌ Images directory not found: ${IMAGES_DIR}`);
@@ -43,139 +35,123 @@ async function createSlideshow() {
     process.exit(1);
   }
 
-  console.log(`Found ${files.length} images`);
-  console.log(`Each image displays for ${IMAGE_DURATION}s`);
+  console.log(`Found ${files.length} images, each for ${IMAGE_DURATION}s`);
 
   const totalFrames = Math.ceil(DURATION / IMAGE_DURATION);
-  console.log(`Total frames: ${totalFrames}\n`);
+  console.log(`Total slideshow slots: ${totalFrames}`);
 
-  const tempDir = path.join(OUTPUT_DIR, 'temp-images');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
+  const tempDir = path.join(OUTPUT_DIR, 'temp-slideshow-imgs');
+  if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+  fs.mkdirSync(tempDir, { recursive: true });
 
-  // ── Convert images SEQUENTIALLY to avoid RAM spike ───────────────────────
-  // Parallel sharp + heic-convert on many large images will OOM on Railway.
-  console.log('Converting to JPG (sequential, RAM-safe)...');
+  // ─── Convert + PRE-SCALE images with Sharp ───────────────────────────────
+  // We scale to TARGET resolution HERE in Node.js so ffmpeg never needs
+  // swscale at all — eliminating the OOM-causing multi-threaded swscaler.
+  console.log(`\nConverting & scaling to ${TARGET_W}x${TARGET_H} (sequential to save RAM)...`);
 
   const convertImage = async (file, idx) => {
     const ext = path.extname(file).toLowerCase();
-    const jpgPath = path.join(tempDir, `img_${String(idx).padStart(2, '0')}.jpg`);
+    // Write as PNG — no lossy re-compression, exact pixel format control
+    const outPath = path.join(tempDir, `img_${String(idx).padStart(3, '0')}.png`);
     const inputPath = path.join(IMAGES_DIR, file);
 
     try {
+      let inputBuffer;
+
       if (ext === '.heic') {
-        const inputBuffer = fs.readFileSync(inputPath);
+        const raw = fs.readFileSync(inputPath);
         const convertFn = (heicConvert && heicConvert.convert) ? heicConvert.convert : heicConvert;
-        const outputBuffer = await convertFn({
-          buffer: inputBuffer,
-          format: 'JPEG',
-          quality: 0.85  // Slightly lower quality to save RAM during conversion
-        });
-        fs.writeFileSync(jpgPath, Buffer.from(outputBuffer));
+        const jpegBuf = await convertFn({ buffer: raw, format: 'JPEG', quality: 0.92 });
+        inputBuffer = Buffer.from(jpegBuf);
       } else {
-        await sharp(inputPath)
-          .resize(1080, 1920, {         // Pre-resize during conversion = less RAM for ffmpeg
-            fit: 'inside',
-            withoutEnlargement: false
-          })
-          .jpeg({ quality: 85, mozjpeg: false })
-          .toFile(jpgPath);
+        inputBuffer = fs.readFileSync(inputPath);
       }
-      return { file, idx, success: true };
+
+      await sharp(inputBuffer)
+        .resize(TARGET_W, TARGET_H, {
+          fit: 'contain',             // Letterbox/pillarbox to preserve aspect ratio
+          background: { r: 0, g: 0, b: 0, alpha: 1 }
+        })
+        .flatten({ background: { r: 0, g: 0, b: 0 } }) // Remove alpha → solid black bg
+        .png({ compressionLevel: 1 }) // Fast, minimal compression (speed > size here)
+        .toFile(outPath);
+
+      return { file, idx, outPath, success: true };
     } catch (e) {
+      console.warn(`  ⚠ Skipping ${file}: ${e.message}`);
       return { file, idx, success: false, error: e.message };
     }
   };
 
-  // Sequential processing: avoids multiple sharp instances in RAM simultaneously
+  // Process sequentially to avoid RAM spikes from parallel sharp operations
   const results = [];
   for (let i = 0; i < files.length; i++) {
-    const result = await convertImage(files[i], i + 1);
-    if (result.success) {
-      console.log(`  ✓ [${i + 1}/${files.length}] ${files[i]}`);
-    } else {
-      console.log(`  ✗ [${i + 1}/${files.length}] ${files[i]} — ${result.error}`);
-    }
-    results.push(result);
+    process.stdout.write(`  [${i + 1}/${files.length}] ${files[i]} ... `);
+    const r = await convertImage(files[i], i + 1);
+    console.log(r.success ? '✓' : `✗ ${r.error}`);
+    results.push(r);
   }
 
   const succeeded = results.filter(r => r.success);
-  const failed    = results.filter(r => !r.success);
-
-  console.log(`\n✓ Converted ${succeeded.length}/${files.length} images`);
-  if (failed.length > 0) {
-    failed.forEach(f => console.log(`  ✗ Failed: ${f.file} — ${f.error}`));
-  }
-
   if (succeeded.length === 0) {
     console.error('❌ All image conversions failed. Cannot create slideshow.');
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+    fs.rmSync(tempDir, { recursive: true, force: true });
     process.exit(1);
   }
-  console.log('');
+  console.log(`\n✓ ${succeeded.length}/${files.length} images ready\n`);
 
-  // ── Build ffmpeg concat list from successfully converted images ───────────
+  // ─── Build ffmpeg concat list ─────────────────────────────────────────────
   const listFile = path.join(tempDir, 'list.txt');
   let listContent = '';
 
-  const validImgs = succeeded.map(r => ({
-    idx: r.idx,
-    filePath: path.resolve(tempDir, `img_${String(r.idx).padStart(2, '0')}.jpg`).replace(/\\/g, '/')
-  }));
-
-  // Loop images to fill totalFrames
   for (let i = 0; i < totalFrames; i++) {
-    const img = validImgs[i % validImgs.length];
-    listContent += `file '${img.filePath}'\n`;
+    const img = succeeded[i % succeeded.length];
+    // ffmpeg concat demuxer requires forward slashes even on Windows
+    const p = img.outPath.replace(/\\/g, '/');
+    listContent += `file '${p}'\n`;
     listContent += `duration ${IMAGE_DURATION}\n`;
   }
-
-  // FFmpeg concat demuxer requirement: repeat last file without duration
-  const lastImg = validImgs[(totalFrames - 1) % validImgs.length];
-  listContent += `file '${lastImg.filePath}'\n`;
+  // Concat demuxer: repeat last entry without duration
+  const lastImg = succeeded[(totalFrames - 1) % succeeded.length];
+  listContent += `file '${lastImg.outPath.replace(/\\/g, '/')}'\n`;
 
   fs.writeFileSync(listFile, listContent, 'utf8');
-  console.log('Created image list file');
 
-  const absoluteOutput   = path.resolve(OUTPUT).replace(/\\/g, '/');
-  const absoluteListFile = path.resolve(listFile).replace(/\\/g, '/');
+  // ─── FFmpeg encode — images already scaled, just encode ───────────────────
+  // -threads 1    → single-threaded = no multi-swscaler OOM
+  // -preset ultrafast → lowest RAM during encoding  
+  // -crf 23       → reasonable quality, lower memory than crf 18
+  // NO scale/pad filter needed — images are pre-scaled by Sharp
+  const absOutput   = path.resolve(OUTPUT).replace(/\\/g, '/');
+  const absListFile = path.resolve(listFile).replace(/\\/g, '/');
 
-  // ── FFmpeg: memory-safe encoding ──────────────────────────────────────────
-  // Key settings to prevent OOM kill on Railway:
-  //   -threads 2        → cap scale/encode thread count (each thread = RAM)
-  //   -preset ultrafast → lowest libx264 RAM footprint
-  //   -crf 26           → good enough for a 9s transition clip
-  //   scale with sws_flags=fast_bilinear → less RAM than default lanczos
-  //   format=yuv420p first → avoids deprecated yuvj420p swscaler warning
-  //   -bufsize 4M       → cap encoder lookahead buffer
-  //
-  // Images were pre-resized by sharp to ~1080 wide, so ffmpeg scale does less work.
-  console.log(`Generating slideshow video (threads=${FFMPEG_THREADS}, preset=${FFMPEG_PRESET}, crf=${FFMPEG_CRF})...`);
+  const cmd = (
+    `${FFMPEG} -y` +
+    ` -threads 1` +                           // ← CRITICAL: prevents OOM kill
+    ` -f concat -safe 0 -i "${absListFile}"` +
+    ` -r 30` +
+    ` -vf "format=yuv420p,setsar=1"` +        // Just format conversion — no scale needed
+    ` -c:v libx264 -preset ultrafast` +        // ← Low RAM encoder preset
+    ` -crf 23 -pix_fmt yuv420p` +
+    ` -t ${DURATION}` +
+    ` "${absOutput}"`
+  );
+
+  console.log('Encoding slideshow...');
+  console.log(`CMD: ${cmd}\n`);
+
   try {
-    execSync(
-      `${FFMPEG} -y -threads ${FFMPEG_THREADS} -f concat -safe 0 -i "${absoluteListFile}"` +
-      ` -r 30` +
-      ` -vf "format=yuv420p,scale=1080:1920:force_original_aspect_ratio=decrease:sws_flags=fast_bilinear,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"` +
-      ` -c:v libx264 -preset ${FFMPEG_PRESET} -crf ${FFMPEG_CRF} -pix_fmt yuv420p` +
-      ` -threads ${FFMPEG_THREADS} -bufsize 4M` +
-      ` -t ${DURATION} "${absoluteOutput}"`,
-      {
-        stdio: 'inherit',
-        maxBuffer: 10 * 1024 * 1024  // 10MB stdout buffer for long operations
-      }
-    );
-
+    execSync(cmd, { stdio: 'inherit' });
     fs.rmSync(tempDir, { recursive: true, force: true });
-    console.log(`✅ Saved: ${OUTPUT}`);
+    console.log(`\n✅ Slideshow saved: ${OUTPUT}`);
   } catch (err) {
     try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
-    console.error('❌ FFMPEG slideshow generation failed:', err.message);
+    console.error('❌ FFmpeg encode failed:', err.message);
     throw err;
   }
 }
 
 createSlideshow().catch(err => {
-  console.error('❌ Error:', err.message || err);
+  console.error('❌ Fatal:', err.message || err);
   process.exit(1);
 });
