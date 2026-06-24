@@ -131,8 +131,8 @@ async function createSlideshow() {
   try {
     execSync(
       `${FFMPEG} -y -f concat -safe 0 -i "${absoluteListFile}"` +
-      ` -r 30 -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1"` +
-      ` -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -t ${DURATION} "${absoluteOutput}"`,
+      ` -r 30 -vf "format=yuv420p,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"` +
+      ` -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -colorspace bt709 -t ${DURATION} "${absoluteOutput}"`,
       { stdio: 'inherit' }
     );
 

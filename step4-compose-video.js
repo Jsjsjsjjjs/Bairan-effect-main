@@ -63,7 +63,7 @@ function main() {
     // Extract last frame
     execSync(`${FFMPEG} -i "${MAIN}" -ss ${mainDur - 0.1} -vframes 1 "${OUTPUT_DIR}/last-frame-for-loop.png" -y`, { stdio: 'inherit' });
     // Create freeze loop from last frame
-    execSync(`${FFMPEG} -loop 1 -i "${OUTPUT_DIR}/last-frame-for-loop.png" -vf "fps=60,scale=1080:1920" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 -t ${freezeDuration} "${OUTPUT_DIR}/freeze-extension.mp4" -y`, { stdio: 'inherit' });
+    execSync(`${FFMPEG} -loop 1 -i "${OUTPUT_DIR}/last-frame-for-loop.png" -vf "format=yuv420p,fps=60,scale=1080:1920" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 -t ${freezeDuration} "${OUTPUT_DIR}/freeze-extension.mp4" -y`, { stdio: 'inherit' });
     // Concatenate original + freeze via filter_complex (works on all platforms)
     execSync(`${FFMPEG} -i "${MAIN}" -i "${OUTPUT_DIR}/freeze-extension.mp4" -filter_complex "[0:v]fps=60,scale=1080:1920[v0];[1:v]fps=60,scale=1080:1920[v1];[v0][v1]concat=n=2:v=1:a=0[out]" -map [out] -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 "${OUTPUT_DIR}/extended-main.mp4" -y`, { stdio: 'inherit' });
     console.log('✓ Done\n');
@@ -76,7 +76,7 @@ function main() {
   console.log('Step 2: Center-out curtain (frozen main frame bg)...');
   try {
     // Scale middle to target resolution
-    execSync(`${FFMPEG} -i "${MIDDLE}" -vf "fps=60,scale=1080:1920" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 -t ${midDur} "${OUTPUT_DIR}/middle-scaled.mp4" -y`, { stdio: 'inherit' });
+    execSync(`${FFMPEG} -i "${MIDDLE}" -vf "format=yuv420p,fps=60,scale=1080:1920" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r 60 -t ${midDur} "${OUTPUT_DIR}/middle-scaled.mp4" -y`, { stdio: 'inherit' });
 
     // Extract frozen frame from end of extended main for bg
     execSync(`${FFMPEG} -i "${OUTPUT_DIR}/extended-main.mp4" -ss ${mainDur - 0.1} -vframes 1 "${OUTPUT_DIR}/frozen-frame.png" -y`, { stdio: 'inherit' });
@@ -110,15 +110,15 @@ function main() {
     execSync(
       `${FFMPEG} -i "${OUTPUT_DIR}/extended-main.mp4" -i "${OUTPUT_DIR}/middle-curtain.mp4" -i "${STICKER}" ${audioInput}` +
       ` -filter_complex "` +
-        `[0:v]fps=60,scale=1080:1920[v0];` +
-        `[1:v]setpts=PTS+${mainDur}/TB,fps=60,scale=1080:1920[mid];` +
-        `[2:v]loop=-1:1,setpts=PTS+${mainDur}/TB,fps=60,` +
+        `[0:v]format=yuv420p,fps=60,scale=1080:1920[v0];` +
+        `[1:v]format=yuv420p,setpts=PTS+${mainDur}/TB,fps=60,scale=1080:1920[mid];` +
+        `[2:v]format=yuv420p,loop=-1:1,setpts=PTS+${mainDur}/TB,fps=60,` +
           `scale='trunc(iw*max(0.6,1-pow(sin((t-${mainDur})/(${total}-${mainDur})*1.5708),2)*0.4)/2)*2` +
              `:trunc(ih*max(0.6,1-pow(sin((t-${mainDur})/(${total}-${mainDur})*1.5708),2)*0.4)/2)*2':eval=frame[sticker];` +
         `[v0][mid]overlay=0:0:shortest=1[tmp];` +
         `[tmp][sticker]overlay=(W-w)/2:H-h:shortest=1[comp];` +
         `[comp]crop=iw-40:ih-40:20+15*sin(t*7):20+15*cos(t*9)[shake];` +
-        `[shake]scale=1080:1920[out_v]${audioFilter}"` +
+        `[shake]scale=1080:1920,format=yuv420p[out_v]${audioFilter}"` +
       ` -map [out_v] ${audioMap} -c:v libx264 -pix_fmt yuv420p -r 60 -t ${total} "${OUTPUT}" -y`,
       { stdio: 'inherit' }
     );
